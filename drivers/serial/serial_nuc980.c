@@ -60,12 +60,18 @@ typedef struct {
 } UART_TypeDef;
 
 #define GCR_BA		0xB0000000 /* Global Control */
-#define REG_MFP_GPF_H	(GCR_BA+0x09C)  /* GPIOF High Byte Multiple Function Control Register */
 #define REG_HCLKEN	0xB0000210
 #define REG_PCLKEN0	0xB0000218
+
+#define REG_MFP_GPF_H	(GCR_BA+0x09C)  /* GPIOF High Byte Multiple Function Control Register */
 #define UART0_BA	0xB0070000 /* UART0 Control (High-Speed UART) */
 #define UART0		((UART_TypeDef *)UART0_BA)
 #define REG_PF_PUSEL	0xB0004170
+
+#define REG_MFP_GPA_L	(GCR_BA+0x070)  /* GPIOFA Low Byte Multiple Function Control Register */
+#define REG_PA_PUSEL	0xB0004030
+#define UART1_BA  0xB0071000 /* UART1 Control (High-Speed UART) */
+#define UART1	   ((UART_TypeDef *)UART1_BA) 
 /*
  * Initialise the serial port with the given baudrate. The settings are always 8n1.
  */
@@ -75,7 +81,7 @@ u32 ext_clk  = EXT_CLK;
 
 int nuc980_serial_init (void)
 {
-	__raw_writel(__raw_readl(REG_PCLKEN0) | 0x10000, REG_PCLKEN0);  // UART clk on
+	__raw_writel(__raw_readl(REG_PCLKEN0) | 0x10000, REG_PCLKEN0);  // UART0 clk on
 	__raw_writel(__raw_readl(REG_HCLKEN) | 0x800, REG_HCLKEN);  	// GPIO clk on
 	__raw_writel(__raw_readl(REG_PF_PUSEL) | 0x400000, REG_PF_PUSEL);	// PF11 (UART0 Rx) pull up
 	__raw_writel((__raw_readl(REG_MFP_GPF_H) & 0xfff00fff) | 0x11000, REG_MFP_GPF_H); // UART0 multi-function
@@ -120,6 +126,53 @@ int nuc980_serial_tstc (void)
 	return (!((__raw_readl(UART0_BASE + REG_COM_MSR) & RX_FIFO_EMPTY)>>14));
 }
 
+int nuc980_serial1_init (void)
+{
+	__raw_writel(__raw_readl(REG_PCLKEN0) | 0x20000, REG_PCLKEN0);  // UART1 clk on
+	__raw_writel(__raw_readl(REG_HCLKEN) | 0x800, REG_HCLKEN);  	// GPIO clk on
+	__raw_writel(__raw_readl(REG_PA_PUSEL) | 0x1, REG_PA_PUSEL);	// PA0 (UART1 Rx) pull up
+	__raw_writel((__raw_readl(REG_MFP_GPA_L) & (0xffffff00)) | 0x44, REG_MFP_GPA_L); // UART1 multi-function
+
+	/* UART1 line configuration for (115200,n,8,1) */
+	UART1->LCR |=0x07;
+	UART1->BAUD = 0x30000066;	/* 12MHz reference clock input, 115200 */
+	UART1->FCR |=0x02;		// Reset UART1 Rx FIFO
+
+	return 0;
+}
+
+void nuc980_serial1_putc (const char ch)
+{
+	while ((UART1->FSR & 0x800000)); //waits for TX_FULL bit is clear
+	UART1->x.THR = ch;
+	if(ch == '\n') {
+		while((UART1->FSR & 0x800000)); //waits for TX_FULL bit is clear
+		UART1->x.THR = '\r';
+	}
+}
+
+void nuc980_serial1_puts (const char *s)
+{
+	while (*s) {
+		nuc980_serial1_putc (*s++);
+	}
+}
+
+int nuc980_serial1_getc (void)
+{
+	while (1) {
+		if (!(UART1->FSR & (1 << 14))) {
+			return (UART1->x.RBR);
+		}
+		WATCHDOG_RESET();
+	}
+}
+
+int nuc980_serial1_tstc (void)
+{
+	return (!((__raw_readl(UART1_BASE + REG_COM_MSR) & RX_FIFO_EMPTY)>>14));
+}
+
 void nuc980_serial_setbrg (void)
 {
 
@@ -137,9 +190,21 @@ static struct serial_device nuc980_serial_drv = {
 	.tstc   = nuc980_serial_tstc,
 };
 
+static struct serial_device nuc980_serial1_drv = {
+        .name   = "nuc980_serial1",
+        .start  = nuc980_serial1_init,
+        .stop   = NULL,
+        .setbrg = nuc980_serial_setbrg,
+        .putc   = nuc980_serial1_putc,
+        .puts   = nuc980_serial1_puts,
+        .getc   = nuc980_serial1_getc,
+        .tstc   = nuc980_serial1_tstc,
+};
+
 void nuc980_serial_initialize(void)
 {
 	serial_register(&nuc980_serial_drv);
+    serial_register(&nuc980_serial1_drv);
 }
 
 __weak struct serial_device *default_serial_console(void) {

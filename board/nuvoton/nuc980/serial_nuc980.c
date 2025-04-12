@@ -66,6 +66,11 @@ typedef struct
 #define UART0_BA  0xB0070000 /* UART0 Control (High-Speed UART) */
 #define UART0	   ((UART_TypeDef *)UART0_BA) 
 
+#define REG_MFP_GPA_L	(GCR_BA+0x070)  /* GPIOA Low Byte Multiple Function Control Register */
+#define REG_PCLKEN0	0xB0000218
+#define UART1_BA  0xB0071000 /* UART1 Control (High-Speed UART) */
+#define UART1	   ((UART_TypeDef *)UART1_BA) 
+
 /*
  * Initialise the serial port with the given baudrate. The settings are always 8n1.
  */
@@ -93,6 +98,52 @@ void nuc980_serial_putc (const char ch)
 	{
 		while((UART0->FSR & 0x800000)); //waits for TX_FULL bit is clear
 		UART0->x.THR = '\r';
+	}
+}
+
+int nuc980_serial1_init (void)
+{
+	__raw_writel(__raw_readl(REG_PCLKEN0) | 0x20000, REG_PCLKEN0);  // UART1 clk on
+	__raw_writel((__raw_readl(REG_MFP_GPA_L) & (0xffffff00)) | 0x44, REG_MFP_GPA_L); // UART1 multi-function
+
+	/* UART1 line configuration for (115200,n,8,1) */
+	UART1->LCR |=0x07;	
+	UART1->BAUD = 0x30000066; /* 12MHz reference clock input, 115200 */
+	
+	return 0;
+}
+
+void nuc980_serial1_putc (const char ch)
+{
+	while ((UART1->FSR & 0x800000)); //waits for TX_FULL bit is clear
+	UART1->x.THR = ch;
+	if(ch == '\n')
+	{
+		while((UART1->FSR & 0x800000)); //waits for TX_FULL bit is clear
+		UART1->x.THR = '\r';
+	}
+}
+
+int nuc980_serial1_getc (void)
+{
+	while (1)
+	{
+		if (!(UART1->FSR & (1 << 14)))
+		{
+			return (UART1->x.RBR);
+		}
+	}
+}
+
+int nuc980_serial1_tstc (void)
+{
+	return (!((__raw_readl(UART1_BASE + REG_COM_MSR) & RX_FIFO_EMPTY)>>14));
+}
+
+void nuc980_serial1_puts (const char *s)
+{
+	while (*s) {
+		nuc980_serial1_putc (*s++);
 	}
 }
 
@@ -136,9 +187,23 @@ static struct serial_device nuc980_serial_drv = {
         .tstc   = nuc980_serial_tstc,
 };
 
+
+static struct serial_device nuc980_serial1_drv = {
+        .name   = "nuc980_serial1",
+        .start  = nuc980_serial1_init,
+        .stop   = NULL,
+        .setbrg = nuc980_serial_setbrg,
+        .putc   = nuc980_serial1_putc,
+        .puts   = nuc980_serial1_puts,
+        .getc   = nuc980_serial1_getc,
+        .tstc   = nuc980_serial1_tstc,
+};
+
+
 void nuc980_serial_initialize(void)
 {
         serial_register(&nuc980_serial_drv);
+        serial_register(&nuc980_serial1_drv);
 }
 
 __weak struct serial_device *default_serial_console(void)
