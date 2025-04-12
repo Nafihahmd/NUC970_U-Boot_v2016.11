@@ -75,6 +75,8 @@ int nuc980_reset_phy(void)
 
 	unsigned short reg;
 	int delay;
+	unsigned short bmcr;
+	nuc980_eth_mii_read(CONFIG_NUC980_PHY_ADDR, MII_BMCR, &bmcr);
 
 	nuc980_eth_mii_write(CONFIG_NUC980_PHY_ADDR, MII_BMCR, BMCR_RESET);
 
@@ -124,6 +126,11 @@ int nuc980_reset_phy(void)
 			writel(readl(MCMDR) & ~(MCMDR_OPMOD | MCMDR_FDUP), MCMDR);
 		}
 	}
+	bmcr &= ~BMCR_ISOLATE;  // BMCR_ISOLATE is usually defined as (1 << 10)
+	nuc980_eth_mii_write(CONFIG_NUC980_PHY_ADDR, MII_BMCR, bmcr);
+	// For re-enabling auto-negotiation (if your design supports it):
+	nuc980_eth_mii_write(CONFIG_NUC980_PHY_ADDR, MII_BMCR, 0x1200);
+
 	return(0);
 }
 
@@ -226,6 +233,7 @@ int nuc980_eth_recv (struct eth_device *dev)
 
 int nuc980_eth_send(struct eth_device *dev, void *packet, int length)
 {
+	int timeout = 100000;
 	tx_desc_ptr->buf = (unsigned char *)packet;
 	tx_desc_ptr->status2 = (unsigned int)length;
 	tx_desc_ptr->status1 |= TXfOwnership_DMA;
@@ -233,7 +241,11 @@ int nuc980_eth_send(struct eth_device *dev, void *packet, int length)
 	writel(0, TSDR);
 
 	// wait 'til transfer complete. (e.g. ownership again set to CPU)
-	while(tx_desc_ptr->status1 & TXfOwnership_DMA);
+	while (tx_desc_ptr->status1 & TXfOwnership_DMA && timeout--)
+		udelay(10);
+
+	if (timeout <= 0)
+	printf("TX timeout! Ownership not cleared.\n");
 
 	tx_desc_ptr = tx_desc_ptr->next;
 
