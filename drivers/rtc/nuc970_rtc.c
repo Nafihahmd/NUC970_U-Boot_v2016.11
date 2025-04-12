@@ -18,7 +18,7 @@
 
 #if defined(CONFIG_CMD_DATE)
 
-#define    RTC_BA    0xB8004000 /* Real Time Clock Control */
+#define    RTC_BA    0xB0041000 /* Real Time Clock Control */
 #define    CLK_BA    0xB0000200 /* Clock Control */
 
 #define    REG_PCLKEN0		(CLK_BA+0x018)  /*  APB IP Clock Enable Control Register 0 */
@@ -88,12 +88,12 @@ int rtc_get (struct rtc_time *tmp)
     uint32_t u32Time;
     uint32_t u32Cal;
     uint32_t u32Wday;
+      /* enable RTC clock */
+      __raw_writel((readl(REG_PCLKEN0) | 0x4), REG_PCLKEN0);
 
       while(!(readl(REG_RTC_INIR) & 0x1))
       {
       	unsigned int i = 0;
-      /* enable RTC clock */
-      __raw_writel((readl(REG_PCLKEN0) | 0x4), REG_PCLKEN0);
       /* init RTC */
       __raw_writel(0xa5eb1357, REG_RTC_INIR);
 
