@@ -939,7 +939,12 @@ int cpu_disable(int nr);
 int cpu_release(int nr, int argc, char * const argv[]);
 #endif
 
+/* AA 04/04/25 */
+void set_user_led_red(void);
+void set_user_led_green(void);
+void set_user_led_off(void);
 #endif /* __ASSEMBLY__ */
+
 
 #ifdef CONFIG_PPC
 /*
@@ -987,5 +992,4 @@ int cpu_release(int nr, int argc, char * const argv[]);
 #ifdef DO_DEPS_ONLY
 # include <environment.h>
 #endif
-
 #endif	/* __COMMON_H_ */

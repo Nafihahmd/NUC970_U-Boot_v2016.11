@@ -212,6 +212,7 @@ static int __abortboot(int bootdelay)
 {
 	int abort = 0;
 	unsigned long ts;
+	set_user_led_off();
 
 #ifdef CONFIG_MENUPROMPT
 	printf(CONFIG_MENUPROMPT);

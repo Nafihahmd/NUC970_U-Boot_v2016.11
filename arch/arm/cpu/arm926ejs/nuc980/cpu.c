@@ -30,7 +30,7 @@ int print_cpuinfo (void)
 	//unsigned int id;
 
 	//id = (readl(REG_PWRON) & 0x0F000000) >> 24;
-
+	set_user_led_red();
 	printf("CPU: NUC980\n");
 
 

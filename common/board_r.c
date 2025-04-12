@@ -438,6 +438,7 @@ int spi_nand_init(void);
 /* go init the NAND */
 static int initr_nand(void)
 {
+	set_user_led_green();
 	puts("NAND:  ");
 	nand_init();
 #ifdef CONFIG_SPI_NAND
